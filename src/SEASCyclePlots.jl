@@ -1,5 +1,5 @@
 module SEASCyclePlots
 
-# Write your package code here.
+test() = print("this is a test")
 
 end

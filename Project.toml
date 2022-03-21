@@ -1,0 +1,13 @@
+name = "SEASCyclePlots"
+uuid = "9a5ea4f9-c5bb-4cba-b248-e7156d3fb9da"
+authors = ["Toby Harvey <tharvey2@uoregon.edu> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

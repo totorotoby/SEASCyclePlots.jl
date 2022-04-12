@@ -30,7 +30,7 @@ function convert_fault(fault_fname::String, filename::String, var::String)
             line .= get_line(fdata, i)
             fault_file["time"][t_ind] = line[1]
             fault_file["maximum V"][t_ind] = line[2]
-            fault_file[var][t_ind, :] .= line[3:end]
+            fault_file[var][:, t_ind] .= line[3:end]
             t_ind += 1
         end
     end
@@ -67,10 +67,10 @@ function convert_stations(dir_name::String, filename::String, stations::Abstract
                 if i == 1
                     station_file["time"][t_ind] = fdata[k,1]
                 end
-                station_file["δ"][i, t_ind] = fdata[k, 2]
-                station_file["V"][i, t_ind] = fdata[k, 3]
-                station_file["τ"][i, t_ind] = fdata[k, 4]
-                station_file["ψ"][i, t_ind] = fdata[k, 5]
+                station_file["δ"][t_ind, i] = fdata[k, 2]
+                station_file["V"][t_ind, i] = fdata[k, 3]
+                station_file["τ"][t_ind, i] = fdata[k, 4]
+                station_file["ψ"][t_ind, i] = fdata[k, 5]
                 t_ind += 1
             end
         end
@@ -83,12 +83,12 @@ end
 
 
 """
-    convert_folder(dir_name::String, new_dir::String , stations::AbstractVector, nn::Int)
+    convert_folder(dir_name::String, new_dir::String , stations::AbstractVector, nn::Integer)
 
 Rewrites all files in the directory `dir_name` storing SEAS benchmark data with stations at `stations`, and a total of `nn` nodes per dimension, to a new folder `new_dir`.
 
 """
-function convert_folder(dir_name::String, new_dir::String , stations::AbstractVector, nn::Int)
+function convert_folder(dir_name::String, new_dir::String , stations::AbstractVector, nn::Integer)
 
     if !isdir(new_dir)
         mkdir(new_dir)

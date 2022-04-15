@@ -48,3 +48,8 @@ function init_station_data(filename::String, num_stations::Integer)
     close(ds)
 
 end
+
+function write_out_fault_data(dirname::String, δ::AbstractArray{Float64}, V::AbstractArray{Float64}, τ::AbstractArray{Float64}, ψ::AbstractArray{Float64}, t::Float64)
+
+
+end

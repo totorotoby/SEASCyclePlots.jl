@@ -1,5 +1,5 @@
 export init_fault_data, init_station_data, init_volume_data, new_dir
-export write_out_fault_data, write_out_stations
+export write_out_fault_data, write_out_stations, write_out_volume
 
 const vars_name = ("δ", "V", "τ", "ψ")
 
@@ -118,7 +118,7 @@ end
 writes out `vars` fault varibles at time `t` to NetCDF `filenames`.
 
 """
-function write_out_fault_data(filenames::Tuple, vars::Tuple, t::Float64)
+function write_out_fault_data(filename::Tuple, vars::Tuple, t::Float64)
 
     file = NCDataset(filename, "a")
     max_V = maximum(V)
@@ -167,7 +167,7 @@ function write_out_volume(volume_file::String, volume_vars::Tuple, t::Float64)
 
     file["u"][t_ind, :, :] .= volume_vars[1]
     file["v"][t_ind, :, :] .= volume_vars[2]
-    file["σ"][t_ind, :, :] .= volume_vars[3]
+    #file["σ"][t_ind, :, :] .= volume_vars[3]
 
 end
 

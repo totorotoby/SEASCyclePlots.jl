@@ -1,7 +1,7 @@
 export init_fault_data, init_station_data, init_volume_data, new_dir
 export write_out_fault_data, write_out_stations, write_out_volume
 
-const vars_name = ("δ", "V", "τ", "ψ")
+
 
 """
     init_fault_data(filename::String, var::String, nn::Integer)
@@ -37,7 +37,7 @@ end
  creates a NetCDF file called `filename` in which station time series data is stored in `lendepths` total stations.
 
 """
-function init_station_data(filename::String, stations::Array{Float64,1})
+function init_station_data(filename::String, stations::AbstractVector)
 
     ds = NCDataset(filename, "c")
 
@@ -69,9 +69,10 @@ function init_volume_data(filename::String, x::Array{Float64, 1}, y::Array{Float
     defVar(ds, "time", Float64, ("time index",))
     defVar(ds, "x", Float64, ("x index",))
     defVar(ds, "y", Float64, ("y index",))
-    defVar(ds, "u", Float64, ("time index", "x index", "y index"))
-    defVar(ds, "v", Float64, ("time index", "x index", "y index"))
-    defVar(ds, "σ", Float64, ("time index", "x index", "y index"))
+    defVar(ds, "maximum V", Float64, ("time index",))
+    defVar(ds, "u", Float64, ("x index", "y index", "time index"))
+    defVar(ds, "v", Float64, ("x index", "y index", "time index"))
+    defVar(ds, "σ", Float64, ("x index", "y index", "time index"))
 
     ds["x"][:] .= x
     ds["y"][:] .= y
@@ -158,16 +159,15 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
 end
 
 
-function write_out_volume(volume_file::String, volume_vars::Tuple, t::Float64)
+function write_out_volume(volume_file::String, volume_vars::Tuple, V::Array{Float64,1}, t::Float64)
 
     file = NCDataset(volume_file, "a")
 
     t_ind = size(file["time"])[1] + 1
     file["time"][t_ind] = t
-
+    file["maximum V"][t_ind] = maximum(V)
     file["u"][t_ind, :, :] .= volume_vars[1]
     file["v"][t_ind, :, :] .= volume_vars[2]
-    #file["σ"][t_ind, :, :] .= volume_vars[3]
 
 end
 

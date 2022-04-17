@@ -1,22 +1,22 @@
-export get_cycles, slip_plot, station_plot
+export get_cycles, slip_plot!, station_plot!, plot_volume!
 
 
 """
     slip_plot(dirname::String, startfinish::Tuple{Integer, Integer}, spacing::Tuple{AbstractFloat, AbstractFloat})
 
-Creates and displays a cummulative slip plot from directory `dirname` that begins at `start_cycle`, and ends at `finish_cycle`.
+Creates and displays a cummulative slip plot from directory `dirname` that begins at `start_cycle`, and ends at `finish_cycle`, with a spacing of `spacing[1]` years in the interseismic phase and `spacing[2]` seconds in the coseismic phase.
 """
-function slip_plot(dirname::String, startfinish::Tuple{Integer, Integer}, spacing::Tuple{AbstractFloat, AbstractFloat})
+function slip_plot!(f::Figure, dirname::String, startfinish::Tuple{Integer, Integer}, spacing::Tuple{AbstractFloat, AbstractFloat}, row::Int, col::Int)
 
 
-    inds, time, depth, δ = get_slice(dirname, startfinish)
+    inds, time, depth, δ = get_slip_slice(dirname, startfinish)
 
     dp = [depth ; NaN]
     
     temp_ind = [i for i in 1:length(depth)]
     
-    f = Figure()
-    ax = Axis(f[1,1], yreversed=true)
+    
+    ax = Axis(f[row,col], yreversed=true)
     
     δ_off = @view δ[:, inds[1]]
     # loop over indivdual cycles
@@ -54,8 +54,13 @@ function slip_plot(dirname::String, startfinish::Tuple{Integer, Integer}, spacin
         return f
 end
 
+"""
+    station_plot(dirname::String, station::AbstractFloat, startfinish::Tuple{Integer, Integer}, vars::Tuple)
 
-function station_plot(dirname::String, station::AbstractFloat, startfinish::Tuple{Integer, Integer}, vars::Tuple)
+Plots the variables `vars` at `station` on the fault from directory `dir` from `startfinish[1]` cycle to `startfinish[2]` cycle.
+
+"""
+function station_plot!(f::Figure, dirname::String, station::AbstractFloat, startfinish::Tuple{Integer, Integer}, var::String, row::Int, col::Int)
 
     inds, loc_inds = get_inds(dirname, startfinish)
 
@@ -63,22 +68,43 @@ function station_plot(dirname::String, station::AbstractFloat, startfinish::Tupl
     stations = station_data["stations"][:]::Array{Float64, 1}
     s_ind = findfirst(x->x==station, stations)
 
-    f = Figure()
+    ax = Axis(f[row,col])
     
-    for (i, var) in enumerate(vars)
-        data = station_data[var][inds[1]:inds[end],s_ind]::Array{Float64, 1}
-        t = station_data["time"][inds[1]:inds[end]]::Array{Float64,1}
-        ax = Axis(f[i,1])
-        lines!(ax, t, data)
-    end
-  
+    
+    data = station_data[var][inds[1]:inds[end],s_ind]::Array{Float64, 1}
+    t = station_data["time"][inds[1]:inds[end]]::Array{Float64,1}
+    
+    lines!(ax, t, data)
+   
+    return ax
+    
+end
 
-    return f
+
+function plot_volume!(f::Figure, dirname::String, var::String, t_ind::Int, row::Int, col::Int)
+
+    volume_data = NCDataset(string(dirname, "volume.nc"))
+
+    x = volume_data["x"][:]::Array{Float64,1}
+    y = volume_data["y"][:]::Array{Float64,1}
+    vv = volume_data[var][:, :, t_ind]::Array{Float64,2}
+
+    max_v = maximum(vv)
+    
+    ax = Axis(f[row,col], yreversed=true)
+    
+    heatmap!(ax, x, y, vv, colorrange=(0.0, 1.0))
+    
+    return max_v
     
 end
     
 
+"""
+    depth_plot, δ_plot = plot_process(δ::AbstractArray, depth::Array{Float64, 1})
 
+A hacky way of reorginzing all of the δ contours so that there is less overhead when plotting...
+"""
 function plot_process(δ::AbstractArray, depth::Array{Float64, 1})
 
     δ_plot = zeros((size(δ)[1] + 1) * size(δ)[2])
@@ -92,6 +118,12 @@ function plot_process(δ::AbstractArray, depth::Array{Float64, 1})
     
 end
 
+"""
+    inds, loc_inds = get_inds(dirname::String, startfinish::Tuple{Integer, Integer})
+
+
+Return local, and global indices in time from directory `dirname` where interseismic and coseismic periods begin and start, for the subset of cycles `startfinish[1]` to `startfinish[2]`.
+"""
 function get_inds(dirname::String, startfinish::Tuple{Integer, Integer})
 
     cycle_ind = get_cycles(string(dirname))
@@ -100,12 +132,16 @@ function get_inds(dirname::String, startfinish::Tuple{Integer, Integer})
     return inds, loc_inds
 end
 
+"""
+    loc_inds, time, depth, δ = get_slip_slice(dirname::String, startfinish::Tuple{Integer, Integer})
 
+Returns the local indices, times, fault coordinates, and slip from the directory `dirname` of a slice of cumulative slip from `startfinish[1]` to `startfinish[2]`.
 
-function get_slice(dirname::String, startfinish::Tuple{Integer, Integer})
+"""
+function get_slip_slice(dirname::String, startfinish::Tuple{Integer, Integer})
 
     inds, loc_inds = get_inds(dirname, startfinish)
-    slip_data = NCDataset(string(dirname, "slip.nc"))
+    slip_data = NCDataset(string(dirname, "fault.nc"))
     time = slip_data["time"][inds[1]:inds[end]]::Array{Float64,1}
     δ = slip_data["δ"][:,inds[1]:inds[end]]::Array{Float64, 2}
     depth = slip_data["depth"][:]::Array{Float64,1}

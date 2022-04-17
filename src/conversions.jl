@@ -6,42 +6,69 @@ export convert_stations, convert_folder
 
 Rewrites a fault file `fault_fname` for variable `var` as described in SEAS benchmark problems to a NetCDF file called `filename`.
 """
-function convert_fault(fault_fname::String, filename::String, var::String)
+function convert_fault(fault_files::Tuple, filename::String, nn::Int)
     
-    file = open(fault_fname, "r")
-    fdata = collect(eachline(file))
-
-    fault_file = NCDataset(filename, "a")
+    write_file = NCDataset(filename, "a")
     
-    yline = get_line(fdata, 1)
-    linesize = length(yline)
-    line = zeros(linesize)
+    line = zeros(nn + 2)
     
-    y = yline[3:end]
-    fault_file["depth"] .= y
-
-    @printf "Rewritting:\n"
-    t_ind = 1
-    for i in 2:size(fdata)[1]
-        @printf "\r%f%%" 100 * i/(size(fdata)[1]-3)
-        if fdata[i] == "BREAK"
-            
-        else
-            line .= get_line(fdata, i)
-            fault_file["time"][t_ind] = line[1]
-            fault_file["maximum V"][t_ind] = line[2]
-            fault_file[var][:, t_ind] .= line[3:end]
-            t_ind += 1
+    for (i, fault_name) in enumerate(fault_files)
+        file = open(fault_name, "r")
+        fdata = collect(eachline(file))
+        @printf "Rewritting %s:\n" vars_name[i]
+        t_ind = 1
+        for j in 2:size(fdata)[1]
+            @printf "\r%f%%" 100 * j/(size(fdata)[1])
+            if fdata[j] != "BREAK"
+                line .= get_line(fdata, j)
+                if vars_name[i] == "δ"
+                    write_file["maximum V"][t_ind] = line[2]
+                    write_file["time"][t_ind] = line[1]
+                end
+                write_file[vars_name[i]][:, t_ind] .= line[3:end]
+                t_ind += 1
+            end
         end
+        @printf "\n"
+        close(file)
+        
     end
-
-    @printf "\n"
-    
-    close(fault_file)
-    close(file)
-    nothing
+        close(write_file)
+        
+        nothing
     
 end
+
+
+function get_depth(slip_file::String)
+
+    file = open(slip_file, "r")
+    fdata = collect(eachline(file))
+    yline = get_line(fdata, 2)
+    y = yline[3:end]
+
+    close(file)
+
+    return y
+
+end
+
+
+function get_xy(u_file::String)
+
+    file = open(u_file, "r")
+    iter = eachline(file)
+    x, iter = firstrest(iter)
+    x = parse_line(x)
+    y, iter = firstrest(iter)
+    y = parse_line(y)
+    
+    close(file)
+
+    return x, y
+    
+end
+
 
 """
     convert_stations(dir_name::String, filename::String, depths::AbstractVector)
@@ -53,17 +80,15 @@ function convert_stations(dir_name::String, filename::String, stations::Abstract
 
     station_file = NCDataset(filename, "a")
 
-    station_file["stations"] .= stations
 
-     @printf "on station: \n"
+    @printf "on station: \n"
     for (i, station) in enumerate(stations)
        @printf "\r%d" i
         fdata = readdlm(string(dir_name, "station_", station))[2:end, :]
         t_ind = 1
         for k in 1:size(fdata)[1]
 
-            if fdata[k,1] == "BREAK"
-            else
+            if fdata[k,1] != "BREAK"
                 if i == 1
                     station_file["time"][t_ind] = fdata[k,1]
                 end
@@ -82,6 +107,42 @@ function convert_stations(dir_name::String, filename::String, stations::Abstract
 end
 
 
+function convert_volume(volume_files::Tuple, filename::String)
+
+    write_file = NCDataset(filename, "a")
+    volume_vars = ("u", "v")
+    
+    x_len = length(write_file["x"][:])
+    y_len = length(write_file["y"][:])
+
+    N = x_len * y_len
+    line = zeros(N)
+
+    for (i, volume_file) in enumerate(volume_files)
+
+        file = open(volume_file, "r")
+        iter = Iterators.drop(eachline(file), 3)
+
+        @printf "rewritting %s\n" volume_vars[i]
+        for (j, line) in enumerate(iter)
+            if line != "BREAK"
+                var = reshape(parse_line(line), x_len, y_len)
+                write_file["time"][j] = j
+                write_file[volume_vars[i]][:, :, j] .= var
+            end
+        end
+
+        close(file)
+        
+    end
+
+    close(write_file)
+    
+end
+
+
+
+
 """
     convert_folder(dir_name::String, new_dir::String , stations::AbstractVector, nn::Integer)
 
@@ -96,38 +157,34 @@ function convert_folder(dir_name::String, new_dir::String , stations::AbstractVe
         error("new directory already exists.")
     end
 
-    δ_name = string(new_dir, "slip.nc")
-    V_name = string(new_dir, "slip_rate.nc")
-    τ_name = string(new_dir, "stress.nc")
-    ψ_name = string(new_dir, "state.nc")
+    fault_name = string(new_dir, "fault.nc")
     stations_name = string(new_dir, "stations.nc")
-    
-    init_fault_data(δ_name, "δ", nn)
-    init_fault_data(V_name, "V", nn)
-    init_fault_data(τ_name, "τ", nn)
-    init_fault_data(ψ_name, "ψ", nn)
-    init_station_data(stations_name, length(stations))
 
+    depth = get_depth(string(dir_name, "slip.dat"))
+    
+    init_fault_data(fault_name, nn, depth)
+    
+    init_station_data(stations_name, stations)
+
+    x, y = get_xy(string(dir_name, "us.dat"))
+    
+    init_volume_data(string(new_dir, "volume.nc"), x, y)
     
     @printf "making stations files...\n"
     convert_stations(dir_name, string(new_dir, "stations.nc"), stations)
     @printf "finished stations file\n"
 
-    @printf "making slip file...\n"
-    convert_fault(string(dir_name, "slip.dat"), δ_name, "δ")
-    @printf "finished slip file\n"
+    fault_files = (string(dir_name, "slip.dat"),
+                   string(dir_name, "slip_rate.dat"),
+                   string(dir_name, "stress.dat"),
+                   string(dir_name, "state.dat"))
     
-    @printf "making slip rate file...\n"
-    convert_fault(string(dir_name, "slip_rate.dat"), V_name, "V")
-    @printf "finished slip rate file\n"
-
-    @printf "making stress file...\n"
-    convert_fault(string(dir_name, "stress.dat"), τ_name, "τ")
-    @printf "finished stress file\n"
-
-    @printf "making state file...\n"
-    convert_fault(string(dir_name, "state.dat"), ψ_name, "ψ")
-    @printf "finished state file\n"
+    convert_fault(fault_files, string(new_dir, "fault.nc"), nn)
+                  
+    volume_files = (string(dir_name, "us.dat"),
+                    string(dir_name, "vs.dat"))
+                  
+    convert_volume(volume_files, string(new_dir, "volume.nc"))
 
     cp(string(dir_name, "input_file.dat"), string(new_dir, "input_file.dat"))
     

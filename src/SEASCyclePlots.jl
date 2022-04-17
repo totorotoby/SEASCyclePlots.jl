@@ -5,8 +5,10 @@ using Printf
 using DelimitedFiles
 using GLMakie
 using Interpolations
+using IterTools
 
 const year_seconds = 31556952
+const vars_name = ("δ", "V", "τ", "ψ")
 
 include("conversions.jl")
 include("utils.jl")

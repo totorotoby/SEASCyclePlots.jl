@@ -1,4 +1,4 @@
-export init_fault_data, init_station_data, new_dir
+export init_fault_data, init_station_data, init_volume_data, new_dir
 export write_out_fault_data, write_out_stations
 
 const vars_name = ("δ", "V", "τ", "ψ")
@@ -9,7 +9,7 @@ const vars_name = ("δ", "V", "τ", "ψ")
 creates a NetCDF file called `filename` in which fault time series of variable `var` is stored at along a total of `nn` nodes.
 
 """
-function init_fault_data(filename::String, var::String, nn::Integer, depth::Array{Float64, 1})
+function init_fault_data(filename::String, nn::Integer, depth::Array{Float64, 1})
 
     ds = NCDataset(filename, "c")
     
@@ -19,8 +19,11 @@ function init_fault_data(filename::String, var::String, nn::Integer, depth::Arra
     defVar(ds, "time", Float64, ("time index",))
     defVar(ds, "depth", Float64, ("depth index",))
     defVar(ds, "maximum V", Float64, ("time index",))
-    defVar(ds, var, Float64, ("depth index", "time index"))
-
+    
+    for var in vars_name
+        defVar(ds, var, Float64, ("depth index", "time index"))
+    end
+    
     ds["depth"][:] .= depth
 
     close(ds)
@@ -55,13 +58,25 @@ function init_station_data(filename::String, stations::Array{Float64,1})
 end
 
 
-function init_volume_data(filename::String, x::Array{Float64,2}, y::Array{Float64,2})
+function init_volume_data(filename::String, x::Array{Float64, 1}, y::Array{Float64, 1})
     
     ds = NCDataset(filename, "c")
 
+    defDim(ds, "time index", Inf)
+    defDim(ds, "x index", length(x))
+    defDim(ds, "y index", length(y))
+
+    defVar(ds, "time", Float64, ("time index",))
+    defVar(ds, "x", Float64, ("x index",))
+    defVar(ds, "y", Float64, ("y index",))
+    defVar(ds, "u", Float64, ("time index", "x index", "y index"))
+    defVar(ds, "v", Float64, ("time index", "x index", "y index"))
+    defVar(ds, "σ", Float64, ("time index", "x index", "y index"))
+
+    ds["x"][:] .= x
+    ds["y"][:] .= y
     
-
-
+    close(ds)
 
 end
 
@@ -72,7 +87,7 @@ end
 creates a new directory called `new_dir` to store data from `stations`, volume, and fault variables, for solutions with `nn` nodes per dimension.
 
 """
-function new_dir(new_dir::String, input_file::String, stations::Array{Float64, 1}, depth::Array{Float64,1}, x::Array{Float64,2}, y::Array{Float64,2})
+function new_dir(new_dir::String, input_file::String, stations::Array{Float64, 1}, depth::Array{Float64,1}, x::Array{Float64,1}, y::Array{Float64,1})
 
     if !isdir(new_dir)
         mkdir(new_dir)
@@ -82,27 +97,17 @@ function new_dir(new_dir::String, input_file::String, stations::Array{Float64, 1
 
     nn = length(depth)
 
-    δ_name = string(new_dir, "slip.nc")
-    V_name = string(new_dir, "slip_rate.nc")
-    τ_name = string(new_dir, "stress.nc")
-    ψ_name = string(new_dir, "state.nc")
+    fault_name = string(new_dir, "fault.nc")
     stations_name = string(new_dir, "stations.nc")
-    
     volume_name = string(new_dir, "volume.nc")
     
-
-    init_fault_data(δ_name, "δ", nn, depth)
-    init_fault_data(V_name, "V", nn, depth)
-    init_fault_data(τ_name, "τ", nn, depth)
-    init_fault_data(ψ_name, "ψ", nn, depth)
+    init_fault_data(fault_name, nn, depth)
     init_station_data(stations_name, stations)
-    #init_volume_data
+    init_volume_data(volume_name, x, y)
 
-    fault_names = [δ_name, V_name, τ_name, ψ_name]
-    
-    cp(input_file, new_dir)
+    cp(input_file, string(new_dir, "input_file.dat"))
 
-    return fault_names, stations_name
+    return fault_name, stations_name, volume_name
 
 
 end
@@ -115,19 +120,20 @@ writes out `vars` fault varibles at time `t` to NetCDF `filenames`.
 """
 function write_out_fault_data(filenames::Tuple, vars::Tuple, t::Float64)
 
+    file = NCDataset(filename, "a")
     max_V = maximum(V)
+    
+    
+    t_ind = size(file["time"])[1] + 1
+    file["time"][t_ind] = t
+    file["maximum V"][t_ind] = max_V
 
-    for (i , filename) in enumerate(filesnames)
-        
-        file = NCDataset(filename, "a")
-        t_ind = size(file["time"])[1] + 1
-        file["time"][t_ind] = t
-        file["maximum V"][t_ind] = max_V
+    for i in 1:length(vars)
         file[vars_name[i]][:, t_ind] .= vars[i]
-        
-        close(file)
     end
-        
+    
+    close(file)
+
 end
 
 """
@@ -142,8 +148,6 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
     t_ind = size(file["time"])[1] + 1
     file["time"][t_ind] = t
 
-    inter_vars = []
-    
     for var in vars
         interp = interpolate(depth, var, Gridded(Linear()))
         file[vars_name[i]][t_ind, :] .= interp
@@ -154,5 +158,16 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
 end
 
 
-function write_out_volume(
+function write_out_volume(volume_file::String, volume_vars::Tuple, t::Float64)
+
+    file = NCDataset(volume_file, "a")
+
+    t_ind = size(file["time"])[1] + 1
+    file["time"][t_ind] = t
+
+    file["u"][t_ind, :, :] .= volume_vars[1]
+    file["v"][t_ind, :, :] .= volume_vars[2]
+    file["σ"][t_ind, :, :] .= volume_vars[3]
+
+end
 

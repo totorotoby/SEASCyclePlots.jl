@@ -151,7 +151,8 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
 
     for (i, var) in enumerate(vars)
         interp = interpolate((depth,), var, Gridded(Linear()))
-        file[vars_name[i]][t_ind, :] .= interp
+        var_stations = interp(stations)
+        file[vars_name[i]][t_ind, :] .= var_stations
     end
     
     close(file)

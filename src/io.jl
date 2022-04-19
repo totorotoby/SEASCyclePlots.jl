@@ -143,7 +143,7 @@ end
 writes out interpolated station data `vars` at `stations` using grid spacing `depth` at time `t` to netCDF file `station_file`.
 
 """
-function write_out_stations(station_file::String, stations::Array{Float64,1}, depth::Array{Float64,1}, vars::Tuple, t::Float64)
+function write_out_stations(station_file::String, stations::Array{Float64,1}, depth::AbstractArray, vars::Tuple, t::Float64)
 
     file = NCDataset(station_file, "a")
     t_ind = size(file["time"])[1] + 1

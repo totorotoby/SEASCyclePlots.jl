@@ -1,4 +1,4 @@
-export get_cycles, slip_plot!, station_plot!, plot_volume!
+export get_cycles, slip_plot!, station_plot!, plot_volume!, fault_animation!
 
 
 """
@@ -9,7 +9,7 @@ Creates and displays a cummulative slip plot from directory `dirname` that begin
 function slip_plot!(f::Figure, dirname::String, startfinish::Tuple{Integer, Integer}, spacing::Tuple{AbstractFloat, AbstractFloat}, row::Int, col::Int)
 
 
-    inds, time, depth, δ = get_slip_slice(dirname, startfinish)
+    inds, time, depth, δ = get_slice(dirname, startfinish)
 
     dp = [depth ; NaN]
     
@@ -98,7 +98,56 @@ function plot_volume!(f::Figure, dirname::String, var::String, t_ind::Int, row::
     return max_v
     
 end
+
+
+function fault_animation!(f::Figure, dirname::String, vars::Array{String, 1}, startfinish::Tuple{Integer, Integer})
+
+    plot_vars = []
+    slices = []
+    axes = []
+    time = 0
+    t = Observable{Float64}(0.0)
+    cycle = Observable{Float64}(Float64(startfinish[1])-1)
+    v_inds = []
     
+    for (i, var) in enumerate(vars)
+
+        loc_inds, time, depth, var_slice = get_slice(dirname, var, startfinish)
+        if i == 1
+            ax = Axis(f[i,1], xlabel="depth(Km)", ylabel=var,
+                      title=@lift("time: $(round($t, digits=3)), Cycle: $(round($cycle, digits=1))"))
+        else
+            ax = Axis(f[i,1], xlabel="depth(Km)", ylabel=var)
+        end
+        
+        plot_var = Observable{Array{Float64,1}}(var_slice[:, 1])
+        lines!(ax, depth, plot_var)
+        push!(plot_vars, plot_var)
+        push!(slices, var_slice)
+        push!(axes, ax)
+        push!(v_inds, loc_inds)
+    end
+    
+    frames = 1:size(slices[1])[2]
+    breaks = -1
+    
+    record(f, "../fault.mp4", frames; framerate = 36) do i
+        
+        t[] = time[i]/year_seconds
+            
+        if i in v_inds[1]
+            breaks += 1
+            if breaks % 2 == 0
+                cycle[] +=1.0
+            end
+        end
+        
+        for j in 1:length(plot_vars)
+            plot_vars[j][] = slices[j][:, i]
+            autolimits!(axes[j])
+        end
+    end
+end
 
 """
     depth_plot, δ_plot = plot_process(δ::AbstractArray, depth::Array{Float64, 1})
@@ -138,15 +187,15 @@ end
 Returns the local indices, times, fault coordinates, and slip from the directory `dirname` of a slice of cumulative slip from `startfinish[1]` to `startfinish[2]`.
 
 """
-function get_slip_slice(dirname::String, startfinish::Tuple{Integer, Integer})
+function get_slice(dirname::String, var::String, startfinish::Tuple{Integer, Integer})
 
     inds, loc_inds = get_inds(dirname, startfinish)
-    slip_data = NCDataset(string(dirname, "fault.nc"))
-    time = slip_data["time"][inds[1]:inds[end]]::Array{Float64,1}
-    δ = slip_data["δ"][:,inds[1]:inds[end]]::Array{Float64, 2}
-    depth = slip_data["depth"][:]::Array{Float64,1}
+    data = NCDataset(string(dirname, "fault.nc"))
+    time = data["time"][inds[1]:inds[end]]::Array{Float64,1}
+    var_slice = data[var][:,inds[1]:inds[end]]::Array{Float64, 2}
+    depth = data["depth"][:]::Array{Float64,1}
 
-    return loc_inds, time, depth, δ
+    return loc_inds, time, depth, var_slice
     
 end
 
@@ -164,7 +213,7 @@ function get_cycles(dirname::String)
     if isfile(cycle_file)
         switches = readdlm(cycle_file, Int64)
     else
-        slip_data = NCDataset(string(dirname, "slip.nc"))
+        slip_data = NCDataset(string(dirname, "fault.nc"))
         Vmax = slip_data["maximum V"][:]::Array{Float64, 1}
         dynam = false
         for (i, Vm) in enumerate(Vmax)

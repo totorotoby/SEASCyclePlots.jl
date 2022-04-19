@@ -15,8 +15,9 @@ function convert_fault(fault_files::Tuple, filename::String, nn::Int)
     for (i, fault_name) in enumerate(fault_files)
         file = open(fault_name, "r")
         fdata = collect(eachline(file))
-        @printf "Rewritting %s:\n" vars_name[i]
         t_ind = 1
+        break_count = 1
+        @printf "writing %s:\n" vars_name[i]
         for j in 2:size(fdata)[1]
             @printf "\r%f%%" 100 * j/(size(fdata)[1])
             if fdata[j] != "BREAK"
@@ -29,14 +30,14 @@ function convert_fault(fault_files::Tuple, filename::String, nn::Int)
                 t_ind += 1
             end
         end
+        
         @printf "\n"
         close(file)
-        
     end
-        close(write_file)
+
+    close(write_file)
         
-        nothing
-    
+    nothing
 end
 
 
@@ -44,7 +45,7 @@ function get_depth(slip_file::String)
 
     file = open(slip_file, "r")
     fdata = collect(eachline(file))
-    yline = get_line(fdata, 2)
+    yline = get_line(fdata, 1)
     y = yline[3:end]
 
     close(file)
@@ -161,7 +162,7 @@ function convert_folder(dir_name::String, new_dir::String , stations::AbstractVe
     stations_name = string(new_dir, "stations.nc")
 
     depth = get_depth(string(dir_name, "slip.dat"))
-    
+
     init_fault_data(fault_name, nn, depth)
     
     init_station_data(stations_name, stations)

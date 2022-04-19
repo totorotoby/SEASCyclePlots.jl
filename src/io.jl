@@ -149,7 +149,7 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
     t_ind = size(file["time"])[1] + 1
     file["time"][t_ind] = t
 
-    for var in vars
+    for (i, var) in enumerate(vars)
         interp = interpolate((depth,), var, Gridded(Linear()))
         file[vars_name[i]][t_ind, :] .= interp
     end

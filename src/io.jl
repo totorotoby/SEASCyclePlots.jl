@@ -162,8 +162,8 @@ end
 function write_out_volume(volume_file::String, volume_vars::Tuple, V::Array{Float64,1}, nn::Integer, t::Float64)
 
     # this is probably pretty inefficient.....
-    u = reshape(volume_vars[1], (n,n))
-    v = reshape(volume_vars[2], (n,n))
+    u = reshape(volume_vars[1], (nn,nn))
+    v = reshape(volume_vars[2], (nn,nn))
 
     file = NCDataset(volume_file, "a")
     t_ind = size(file["time"])[1] + 1

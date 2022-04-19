@@ -169,8 +169,8 @@ function write_out_volume(volume_file::String, volume_vars::Tuple, V::Array{Floa
     t_ind = size(file["time"])[1] + 1
     file["time"][t_ind] = t
     file["maximum V"][t_ind] = maximum(V)
-    file["u"][t_ind, :, :] .= u[1:2:end, 1:2:end]
-    file["v"][t_ind, :, :] .= v[1:2:end, 1:2:end]
+    file["u"][:, :. t_ind] .= u[1:2:end, 1:2:end]
+    file["v"][:, :, t_ind] .= v[1:2:end, 1:2:end]
 
 end
 

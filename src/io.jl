@@ -122,7 +122,7 @@ writes out `vars` fault varibles at time `t` to NetCDF `filenames`.
 function write_out_fault_data(filename::String, vars::Tuple, t::Float64)
 
     file = NCDataset(filename, "a")
-    max_V = maximum(V)
+    max_V = maximum(vars[2])
     
     
     t_ind = size(file["time"])[1] + 1

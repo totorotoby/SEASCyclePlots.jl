@@ -159,15 +159,18 @@ function write_out_stations(station_file::String, stations::Array{Float64,1}, de
 
 end
 
-function write_out_volume(volume_file::String, volume_vars::Tuple, V::Array{Float64,1}, t::Float64)
+function write_out_volume(volume_file::String, volume_vars::Tuple, V::Array{Float64,1}, nn::Integer, t::Float64)
+
+    # this is probably pretty inefficient.....
+    u = reshape(volume_vars[1], (n,n))
+    v = reshape(volume_vars[2], (n,n))
 
     file = NCDataset(volume_file, "a")
-
     t_ind = size(file["time"])[1] + 1
     file["time"][t_ind] = t
     file["maximum V"][t_ind] = maximum(V)
-    file["u"][t_ind, :, :] .= volume_vars[1]
-    file["v"][t_ind, :, :] .= volume_vars[2]
+    file["u"][t_ind, :, :] .= u[1:2:end, 1:2:end]
+    file["v"][t_ind, :, :] .= v[1:2:end, 1:2:end]
 
 end
 

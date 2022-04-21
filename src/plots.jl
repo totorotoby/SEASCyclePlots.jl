@@ -9,7 +9,7 @@ Creates and displays a cummulative slip plot from directory `dirname` that begin
 function slip_plot!(f::Figure, dirname::String, startfinish::Tuple{Integer, Integer}, spacing::Tuple{AbstractFloat, AbstractFloat}, row::Int, col::Int)
 
 
-    inds, time, depth, δ = get_slice(dirname, startfinish)
+    inds, time, depth, δ = get_slice(dirname, "δ", startfinish)
 
     dp = [depth ; NaN]
     

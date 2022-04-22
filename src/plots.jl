@@ -208,27 +208,21 @@ Gets the indexes at which interseismic and coseismic periods begin and end from 
 """
 function get_cycles(dirname::String)
 
-    cycle_file = string(dirname, "cycle.dat")
-    switches = Integer[]
-    if isfile(cycle_file)
-        switches = readdlm(cycle_file, Int64)
-    else
-        slip_data = NCDataset(string(dirname, "fault.nc"))
-        Vmax = slip_data["maximum V"][:]::Array{Float64, 1}
-        dynam = false
-        for (i, Vm) in enumerate(Vmax)
-            if Vm > log(.1) && dynam == false
-                push!(switches, i)
-                dynam = true
-            elseif Vm < log(.05) && dynam == true
-                push!(switches, i)
-                dynam = false
-            end
+    slip_data = NCDataset(string(dirname, "fault.nc"))
+    Vmax = slip_data["maximum V"][:]::Array{Float64, 1}
+    switches = Int64[]
+    
+    dynam = false
+    for (i, Vm) in enumerate(Vmax)
+        if Vm > .1 && dynam == false
+            push!(switches, i)
+            dynam = true
+        elseif Vm < .05 && dynam == true
+            push!(switches, i)
+            dynam = false
         end
-
-        writedlm(cycle_file, switches)
-        
     end
+
     
     return switches
 

@@ -2,6 +2,10 @@ module SEASCyclePlots
 
 module io
 
+
+const year_seconds = 31556952
+const vars_name = ("δ", "V", "τ", "ψ")
+
 using NCDatasets
 using Printf
 using DelimitedFiles

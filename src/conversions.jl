@@ -11,6 +11,17 @@ function convert_fault(fault_files::Tuple, filename::String, nn::Int)
     write_file = NCDataset(filename, "a")
     
     line = zeros(nn + 2)
+
+    sizes = []
+
+    for (i, fault_name) in enumerate(fault_files)
+        file = open(fault_name, "r")
+        fdata = collect(eachline(file)) 
+        push!(sizes, size(fdata)[1])
+        close(file)
+    end
+
+    data_length = minimum(sizes)
     
     for (i, fault_name) in enumerate(fault_files)
         file = open(fault_name, "r")
@@ -18,8 +29,8 @@ function convert_fault(fault_files::Tuple, filename::String, nn::Int)
         t_ind = 1
         break_count = 1
         @printf "writing %s:\n" vars_name[i]
-        for j in 2:size(fdata)[1]
-            @printf "\r%f%%" 100 * j/(size(fdata)[1])
+        for j in 2:data_length
+            @printf "\r%f%%" 100 * j/data_length
             if fdata[j] != "BREAK"
                 line .= get_line(fdata, j)
                 if vars_name[i] == "δ"
@@ -29,12 +40,11 @@ function convert_fault(fault_files::Tuple, filename::String, nn::Int)
                 write_file[vars_name[i]][:, t_ind] .= line[3:end]
                 t_ind += 1
             end
-        end
-        
+        end    
         @printf "\n"
         close(file)
     end
-
+    #error()
     close(write_file)
         
     nothing

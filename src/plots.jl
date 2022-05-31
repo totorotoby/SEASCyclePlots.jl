@@ -1,4 +1,4 @@
-export get_cycles, slip_plot!, station_plot!, plot_switch!, plot_volume!, fault_animation!
+export get_cycles, slip_plot!, station_plot!, plot_max_R!, plot_switch!, plot_volume!, fault_animation!, get_initial_conditions, plot_max_slip_rate!, plot_fault_var!
 
 
 """
@@ -11,7 +11,8 @@ Optional arguments:
 `s_to_d::Float64` - sets the threshold of when the coseismic phase begins and the interseismic phase ends, by slip rate on the fault.
 `d_to_s::Float64` - sets the threshold of when the interseismic phase begins and the coseismic phase ends, by slip rate on the fault.
 """
-function slip_plot!(f::Figure, filename::String, startfinish::Tuple{Integer, Integer}, row::Int, col::Int, title::String; spacing=nothing, s_to_d=.01::Float64, d_to_s=.001::Float64)
+function slip_plot!(f::Figure, filename::String, startfinish::Tuple{Integer, Integer}, row::Int, col::Int, title::String;
+                    spacing=nothing, s_to_d=.01::Float64, d_to_s=.001::Float64)
 
 
     inds, time, depth, δ = get_slice(filename, "δ", startfinish; s_to_d=s_to_d, d_to_s=d_to_s)
@@ -20,14 +21,13 @@ function slip_plot!(f::Figure, filename::String, startfinish::Tuple{Integer, Int
     
     temp_ind = [i for i in 1:length(depth)]
     
-    
-    ax = Axis(f[row,col], yreversed=true, title=title, xlims=(0,25), xlabel="Cummulative Slip (m)", ylabel="Depth (Km)")
+    ax = Axis(f[row,col], yreversed=true, title=title, xlabel="Cummulative Slip (m)", ylabel="Depth (Km)")
 
-    #if startfinish[1] == 1
-    #    δ_off = zeros(size(δ)[1])
-    #else
+    if startfinish[1] == 1
+        δ_off = zeros(size(δ)[1])
+    else
         δ_off = @view δ[:, inds[1]]
-    #end
+    end
     # loop over indivdual cycles
     for i in 1:length(inds)-1
         
@@ -62,8 +62,71 @@ function slip_plot!(f::Figure, filename::String, startfinish::Tuple{Integer, Int
     
     
     
-        return f
+        return f, ax, depth
 end
+
+
+function plot_max_slip_rate!(f::Figure, filenames::Vector{String}, startfinish::Tuple{Integer, Integer}, row::Int, col::Int,
+                             d_to_s::Vector{Float64}, labels::Vector{String})
+
+    ax = Axis(f[row,1:2])
+
+    colors = [:midnightblue, :darkorange, :yellowgreen]
+    
+    for i in 1:length(filenames)
+        
+        inds, loc_inds = get_inds(filenames[i], startfinish, d_to_s=d_to_s[i])
+        data = NCDataset(filenames[i])
+        mV = log10.(data["maximum V"][inds[1]:inds[end]]::Array{Float64, 1})
+        t = data["time"][inds[1]:inds[end]] ./ year_seconds
+
+        
+        
+        lines!(ax, t, mV, linewidth=4, color=colors[i], label=labels[i])
+        
+        
+    end
+
+    return f, ax
+        
+end
+
+
+function plot_fault_var!(f::Figure, filenames::Vector{String}, var::String, cycle_num::Int, row::Int, col::Int, d_to_s::Vector{Float64},
+                         seconds_list::Vector{Float64}, labels::Vector{String})
+
+    ax = Axis(f[row, col], yreversed=true)
+
+    line_style = [nothing, :dash, :dashdot]
+    colors = [:midnightblue, :darkorange, :yellowgreen]
+    text_offset = [0, 0.0, 0.3]
+    
+    for i in 1:length(filenames)
+        
+        inds, time, depth, var_data = get_slice(filenames[i], var, (cycle_num, cycle_num); d_to_s=d_to_s[i])
+        co_var = @view var_data[:, inds[2]:inds[3]]
+        co_time =@view time[inds[2]:inds[3]]
+        dt = co_time[2] - co_time[1]
+        sec_step = Int(floor(1/dt))
+        index = Int.(sec_step .* seconds_list[i])
+        
+        text_point = (maximum(co_var[:, index]) - text_offset[i], depth[findmax(co_var[:, index])[2]])
+        textlabel = string(seconds_list[i]," s") 
+
+
+        lines!(ax, co_var[:, index]::Array{Float64,1}, depth, color=colors[i], linewidth=3, label=labels[i])
+        
+        
+        #text!(textlabel, position=text_point, textsize=30)
+    end
+
+    #axislegend(ax, position=:rb)
+    
+    return f, ax
+    
+end
+
+
 
 """
     station_plot!(f::Figure, dirname::String, filename::String, station::AbstractFloat, startfinish::Tuple{Integer, Integer}, var::String, row::Int, col::Int)
@@ -71,37 +134,39 @@ end
 Creates and displays station time series of variables `var` from file `filename` in figure `f` at (`row`, `col`)  at station depth `station` beginning with cycle `startfinish[1]` and ending with `startfinish[2]`.
 
 """
-function station_plot!(f::Figure, filename::String, station::AbstractFloat, startfinish::Tuple{Integer, Integer}, var::String, row::Int, col::Int)
+function station_plot!(f::Figure, filenames::Vector{String}, station::AbstractFloat, startfinish::Tuple{Integer, Integer},
+                       var::String, row::Int, col::Int, d_to_s::Vector{Float64}; labels=nothing)
 
-    inds, loc_inds = get_inds(filename, startfinish, d_to_s=.0005)
-
-    station_data = NCDataset(filename)
-    stations = station_data["stations"][:]::Array{Float64, 1}
-    s_ind = findfirst(x->x==station, stations)
-
-    ax = Axis(f[row,col])
+     ax = Axis(f[row,col])
     
-    data = station_data[var][inds[1]:inds[end],s_ind]::Array{Float64, 1}
-    t = station_data["time"][inds[1]:inds[end]]::Array{Float64,1}
+    for i in 1:length(filenames)
+        
+        inds, loc_inds = get_inds(filenames[i], startfinish, d_to_s=d_to_s[i])
 
-    data = station_data[var][:,s_ind]::Array{Float64, 1}
-    t = station_data["time"][:]::Array{Float64,1}
+        station_data = NCDataset(filenames[i])
+        stations = station_data["stations"][:]::Array{Float64, 1}
+        s_ind = findfirst(x->x==station, stations)
+        
+        data = log10.(station_data[var][inds[1]:inds[end],s_ind]::Array{Float64, 1})
+        t = station_data["time"][inds[1]:inds[end]]::Array{Float64,1}
 
-    
-    lines!(ax, t, data, color=:blue)
-   
-    return ax
+        lines!(ax, t, data, linewidth=2, label=labels[i])
+    end
+
+    axislegend(ax; labelsize=30, markersize=30)
+    return f, ax
     
 end
 
-function plot_switch!(f::Figure, filename::String, station::AbstractFloat, switch::Integer, switching_criteria::AbstractFloat, title::String)
+function plot_switch!(f::Figure, filename::String, station::AbstractFloat, switch::Integer, switching_criteria::AbstractFloat,
+                      var::String, title::String, row::Int, col::Int)
 
 
     cycle_inds = get_cycles(filename; d_to_s=switching_criteria)
 
     begin_I = cycle_inds[2*switch + 1]
 
-    start_ind = begin_I - 20
+    start_ind = begin_I - 50
     end_ind = begin_I + 10
 
     count_ax = start_ind:1.0:end_ind
@@ -109,32 +174,71 @@ function plot_switch!(f::Figure, filename::String, station::AbstractFloat, switc
     station_data = NCDataset(filename)
     stations = station_data["stations"][:]::Array{Float64, 1}
     
+
     s_ind = findfirst(x->x==station, stations)
-    display(station_data["maximum V"][begin_I])
-    τ_data = station_data["τ"][start_ind:end_ind,s_ind]::Array{Float64, 1}
-    V_data = station_data["V"][start_ind:end_ind,s_ind]::Array{Float64, 1}
+    #display(station_data["maximum V"][begin_I])
+    data = station_data[var][start_ind:end_ind,s_ind]::Array{Float64, 1}
+    #V_data = station_data["V"][start_ind:end_ind,s_ind]::Array{Float64, 1}
     t = station_data["time"][start_ind:end_ind]::Array{Float64,1}
 
-    ax1 = Axis(f[1, 1], title=string(title, ", τ"))
-    ax2 = Axis(f[2, 1], title="V")
-    ax3 = Axis(f[1, 2])
-    ax4 = Axis(f[2, 2])
+    ax1 = Axis(f[row, col], title=title)
     
+    #ax2 = Axis(f[2, 1], title="V")
+    #ax3 = Axis(f[1, 2])
+    #ax4 = Axis(f[2, 2])
+    #=
     lines!(ax1, t, τ_data)
     scatter!(ax1, t, τ_data)
     lines!(ax2, t, V_data)
     scatter!(ax2, t, V_data)
+    =#
+    
+    lines!(ax1, count_ax, data)
+    scatter!(ax1, count_ax, data)
+    vlines!(ax1, begin_I, color=:red)
 
-    lines!(ax3, count_ax, τ_data)
-    scatter!(ax3, count_ax, τ_data)
-    vlines!(ax3, begin_I, color=:red)
-
+    #=
     lines!(ax4, count_ax, V_data)
     scatter!(ax4, count_ax, V_data)
     vlines!(ax4, begin_I, color=:red)
+    =#
     return f
     
 end
+
+
+function plot_max_R!(f::Figure, filenames::Vector{String}, switch::Integer, switching_criterias::Vector{Float64}, title::String,
+                     row::Int, col::Int; labels=nothing)
+
+    ax = Axis(f[row, col], title=title, yscale=log10)
+ 
+    for (i, filename) in enumerate(filenames)
+    
+        cycle_inds = get_cycles(filename; d_to_s=switching_criterias[i])
+        
+        begin_ind = cycle_inds[2] + 10000
+        inter_steps = 1000
+        end_ind = cycle_inds[3] + inter_steps
+        switch_ind = cycle_inds[3]
+
+        switch_loc = switch_ind - begin_ind
+        
+        fault_data = NCDataset(filename)
+        maxR = fault_data["maxR"][begin_ind:end]::Array{Float64,1}
+        @show fault_data["time"][end]
+        steps = 1.0:1.0:length(maxR)
+        Rswitch = fault_data["maxR"][switch_ind]
+
+        lines!(ax, steps, maxR, label=labels[i])
+        #scatter!(ax, steps, maxR)
+        
+        scatter!(ax, [Float64(switch_loc)], [Rswitch], markersize=20)
+    end
+
+    axislegend(ax; labelsize=30, markersize=30)
+    return f, ax
+
+end  
 
 
 """
@@ -282,11 +386,10 @@ Gets the indexes at which interseismic and coseismic periods begin and end from 
 """
 function get_cycles(filename::String; s_to_d=.01::Float64, d_to_s=.001::Float64)
 
-    #@show d_to_s
-    #@show s_to_d
 
     data = NCDataset(filename)
     mV = data["maximum V"][:]::Array{Float64, 1}
+    #mv = data["maximum v"][:]::Array{Float64, 1}
     switches = Int64[1]
     dynam = false
     for i in 1:size(mV)[1]
@@ -302,4 +405,41 @@ function get_cycles(filename::String; s_to_d=.01::Float64, d_to_s=.001::Float64)
     #@show size(switches)
     return switches
 
+end
+
+
+function get_initial_conditions(filename::String, file_out::String, cycle_num::Int, switching_criteria::Float64)
+
+    f = Figure()
+
+    f, ax, depth = slip_plot!(f, filename, (1,8), 1, 1, ""; spacing=(.5, .5), d_to_s=.005)
+
+    
+    switches = get_cycles(filename; d_to_s=switching_criteria)
+    index = switches[2*cycle_num - 1] + 1
+
+    data = NCDataset(filename)
+    δ = data["δ"][:, index]::Array{Float64,1}
+    ψ = data["ψ"][:, index]::Array{Float64,1}
+    t = data["time"][index]::Float64
+
+    ψδ = vcat(ψ, δ)
+
+    lines!(ax, δ, depth, color=:green, linewidth=10)
+
+    display(f)
+    
+    println("write out (y/n):")
+    ans = readline()
+
+    if ans == "y"
+        io = open(string(file_out, "_init_con"), "w")
+        writedlm(io, ψδ)
+        close(io)
+        io = open(string(file_out, "_t"), "w")
+        writedlm(io, [t])
+        close(io)
+    end
+
+    
 end
